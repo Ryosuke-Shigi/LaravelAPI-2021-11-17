@@ -9,6 +9,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use carbon\Carbon;
 
+use App\Models\table01;
+use App\Models\table02;
+use App\Models\table03;
+use App\Models\table04;
+use App\Models\table05;
+use App\Models\table06;
+use App\Models\table07;
 use App\Models\table08;
 use App\Models\table09;
 use App\Models\table10;
@@ -296,6 +303,7 @@ class ticketsController extends BaseController
 
         //外部apiここでエラーを起こしている
 
+        dump($request);
 
         //リクエストの単価が正しいものを送信しているか確認
         //m_ticket_types(tables05)->type_money（単価）が requestのtype_moneyと同一か確認
@@ -435,18 +443,18 @@ class ticketsController extends BaseController
 
                 $tables10->save();
             }
-            DB::RollBack();
 
-            $test = DB::table('tables02');
+
+            //$test = DB::table('tables02');
             //$test->get();
             //dump($test);
             //$test->where('id','=',1)->first();
             //dump($test);
-            dump($test->get());
+/*             dump($test->get());
             dump($test->where('id','=',7)->first());
-            dump($test->get());
+            dump($test->get()); */
 
-            //DB::commit();
+            DB::commit();
             //return array('status'=>0,'reserve_code'=>$reserv_code);
             return $this->_success(array('reserv_code'=>$reserv_code));
         }catch(Exception $exception){
