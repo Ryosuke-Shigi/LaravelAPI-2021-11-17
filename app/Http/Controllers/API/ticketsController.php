@@ -317,6 +317,7 @@ class ticketsController extends BaseController
 
 
 
+
         //販売期間内にあるかを確認
         //unixtimeより販売開始と販売終了の間であればよい
         //それぞれでエラー文を返すため、一つずつ判断する
