@@ -114,8 +114,10 @@ class ticketsController extends BaseController
     }
 
 
-    //webAPI　re:チケット情報 さらにチケットコードで絞る
-    public function sales_interval_ticket_code(REQUEST $request){
+
+    //チケットネームとチケットコードを返す
+    //条件：sales_interval_startとendで抽出　重複する名前は消す
+    public function sales_interval_ticket_code_name(REQUEST $request){
         //返し値用配列 basecontrollerを使う場合　必要なし
         $values=array('status'=>0,'total_num'=>0,'tickets'=>array());
         //選択した時間をcarbonをつかって書式を統一する
@@ -147,7 +149,6 @@ class ticketsController extends BaseController
             ->join('tables02','tables01.ticket_code','=','tables02.ticket_code')
             ->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables02.sales_interval_start','tables02.sales_interval_end'])
             //条件：選択した時間がstartからendの間にある
-            ->where('tables01.ticket_code','=',$request->ticket_code)
             ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
             ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
             ->paginate($request->num,$request->page);
@@ -156,12 +157,11 @@ class ticketsController extends BaseController
             $tablenum=DB::table('tables02')
             //->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables03.contents_data','tables02.sales_interval_start','tables02.sales_interval_end'])
             //条件：選択した時間がstartからendの間にある
-            ->where('ticket_code','=',$request->ticket_code)
             ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
             ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
             ->get();
-            //最大数取得
-            $values['total_num']=$tablenum->count();
+/*             //最大数取得
+            $values['total_num']=$tablenum->count(); */
 
             //tables03取得
             $tables03=DB::table('tables03')->get();
@@ -171,9 +171,286 @@ class ticketsController extends BaseController
             //$tempに１件分のtiketsを作成して、まとめの$valueに入れていく
             //$tablesで抽出したデータを元に　ticket_codeで判断して　同じであれば入れていく
             foreach($tables as $value){
+                //同名チェック
+                $flg = false;
+                //一軒分をとるために　仮の配列を作成
+                $temp=array('ticket_code'=>$value->ticket_code,'ticket_name'=>$value->ticket_name);
+                foreach($values['tickets'] as $tickets){
+                    if($tickets['ticket_name'] == $temp['ticket_name']){
+                        //同名があったのでフラグをtrue
+                        $flg=true;
+                        break;
+                    }
+                }
+                //同名がなければ
+                if($flg == false){
+                    //最後にまとめてvaluesのtickets内に放り込む
+                    array_push($values['tickets'],$temp);
+                    $values['total_num']++;
+                    //}
+                }
+            }
+    }
+
+        return $values;
+    }
+
+
+
+    //チケットネームとチケットコードを返すticket_name contents_data caution_textを返す
+    //条件：sales_interval_startとendで抽出　
+    //requestで引き取るのは[sales_day,num,page,ticket_code]
+    public function sales_interval_ticket_code_detail(REQUEST $request){
+        //返し値用配列 basecontrollerを使う場合　必要なし
+        $values=array('status'=>0,'total_num'=>0,'tickets'=>array());
+        //選択した時間をcarbonをつかって書式を統一する
+        $selectTime=new Carbon($request->sales_day);//これで2021-10-01 を2021-10-01 00:00:00の形に
+
+        //件数カウント
+        $tablenum=DB::table('tables02')
+                    ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+                    ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+                    ->get();
+
+        //引数がない　もしくは　件数が０　の場合は status=-1 error_messageを返す
+        if(!isset($request->sales_day)
+             || !isset($request->num )
+             || !isset($request->page)
+             || $tablenum->count()==0){
+            //エラー用変数
+            $error=array('status'=>-1,'error_message'=>array());
+            //各項目それぞれエラー処理をかける
+            if(!isset($request->sales_day)){array_push($error['error_message'],"sales_dayは必須です");};
+            if(!isset($request->num)){array_push($error['error_message'],"numは必須です");};
+            if(!isset($request->page)){array_push($error['error_message'],"pageは必須です");};
+            if(isset($request->sales_day)&&$tablenum->count()==0){array_push($error['error_message'],"件数は０です");};
+            //エラーメッセージを返す
+            return $error;
+        }else{
+            //table01,02,03
+            //table1,2をチケットコードでつなぐ
+            //id biz_id ticket_code sales_id ticket_name sales_interval_start sales_interval_end を取得
+            //$reqest->ticket_codeで抽出
+            //sales_interval_start と sales_interval_endの間のチケット　で抽出
+            //ペジネイトで件数を限定する
+            $tables=DB::table('tables01')//ticket_name
+            ->join('tables02','tables01.ticket_code','=','tables02.ticket_code')//ticket_code
+            ->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables02.sales_interval_start','tables02.sales_interval_end'])
+            //条件：選択した時間がstartからendの間にある
+            ->where('tables01.ticket_code','=',$request->ticket_code)
+            ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+            ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+            ->paginate($request->num,$request->page);
+
+            //総件数カウント
+            //上記と同条件にして getからcountをする
+            $tablenum=DB::table('tables02')
+            //->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables03.contents_data','tables02.sales_interval_start','tables02.sales_interval_end'])
+            //条件：選択した時間がstartからendの間にある
+            ->where('ticket_code','=',$request->ticket_code)
+            ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+            ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+            ->get();
+            //件数取得
+            $values['total_num']=$tablenum->count();
+
+
+            //tables03取得
+            $tables03=DB::table('tables03')->where('ticket_code','=',$request->ticket_code)->get();
+            //tables03取得
+            $tables04=DB::table('tables04')->where('ticket_code','=',$request->ticket_code)->get();
+
+            //$tempに１件分のtiketsを作成して、まとめの$valueに入れていく
+            //$tablesで抽出したデータを元に　ticket_codeで判断して　同じであれば入れていく
+            //送るデータをまとめる
+            foreach($tables as $value){
+                //一軒分をとるために　仮の配列を作成
+                $temp=array('sales_id'=>$value->sales_id,'ticket_code'=>$value->ticket_code,'ticket_name'=>$value->ticket_name,'contents_data'=>array(),'cautions_text'=>array(),'ticket_contents'=>array(),'ticket_types'=>array());
+                //tables03で同じチケットコードであれば　ticket_contentsという配列にまとめていれていく
+                foreach($tables03 as $t03){
+                        array_push($temp['contents_data'],$t03->contents_data);
+                }
+                //tables04で同じチケットコードであれば　ticket_typesという配列にまとめていれていく
+                foreach($tables04 as $t04){
+                        array_push($temp['cautions_text'],$t04->cautions_text);
+                }
+                //最後にまとめてvaluesのtickets内に放り込む
+                array_push($values['tickets'],$temp);
+                //}
+            }
+    }
+
+        return $values;
+    }
+
+
+
+
+
+    //チケットコードだけを返すものを作るために、まるごと保存しておく　上のソースコードを消して解除すれば元に戻せる20211117
+    //webAPI　re:チケット情報 さらにチケットコードで絞る
+    public function sales_interval_ticket_code(REQUEST $request){
+        //返し値用配列 basecontrollerを使う場合　必要なし
+        $values=array('status'=>0,'total_num'=>0,'tickets'=>array());
+        //選択した時間をcarbonをつかって書式を統一する
+        $selectTime=new Carbon($request->sales_day);//これで2021-10-01 を2021-10-01 00:00:00の形に
+
+        //件数カウント
+        $tablenum=DB::table('tables02')
+                    ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+                    ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+                    ->get();
+
+        //引数がない　もしくは　件数が０　の場合は status=-1 error_messageを返す
+        if(!isset($request->sales_day)
+             || !isset($request->num )
+             || !isset($request->page)
+             || $tablenum->count()==0){
+            //エラー用変数
+            $error=array('status'=>-1,'error_message'=>array());
+            //各項目それぞれエラー処理をかける
+            if(!isset($request->sales_day)){array_push($error['error_message'],"sales_dayは必須です");};
+            if(!isset($request->num)){array_push($error['error_message'],"numは必須です");};
+            if(!isset($request->page)){array_push($error['error_message'],"pageは必須です");};
+            if(isset($request->sales_day)&&$tablenum->count()==0){array_push($error['error_message'],"件数は０です");};
+            //エラーメッセージを返す
+            return $error;
+        }else{
+            //table01,02,03
+            //table1,2をチケットコードでつなぐ
+            //id biz_id ticket_code sales_id ticket_name sales_interval_start sales_interval_end を取得
+            //$reqest->ticket_codeで抽出
+            //sales_interval_start と sales_interval_endの間のチケット　で抽出
+            //ペジネイトで件数を限定する
+            $tables=DB::table('tables01')
+            ->join('tables02','tables01.ticket_code','=','tables02.ticket_code')
+            ->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables02.sales_interval_start','tables02.sales_interval_end'])
+            //条件：選択した時間がstartからendの間にある
+            ->where('tables01.ticket_code','=',$request->ticket_code)
+            ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+            ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+            ->paginate($request->num,$request->page);
+
+            //総件数カウント
+            //上記と同条件にして getからcountをする
+            $tablenum=DB::table('tables02')
+            //->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables03.contents_data','tables02.sales_interval_start','tables02.sales_interval_end'])
+            //条件：選択した時間がstartからendの間にある
+            ->where('ticket_code','=',$request->ticket_code)
+            ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+            ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+            ->get();
+            //件数取得
+            $values['total_num']=$tablenum->count();
+
+
+            //tables03取得
+            $tables03=DB::table('tables03')->get();
+            //tables05取得
+            $tables05=DB::table('tables05')->get();
+            //$tempに１件分のtiketsを作成して、まとめの$valueに入れていく
+            //$tablesで抽出したデータを元に　ticket_codeで判断して　同じであれば入れていく
+            //送るデータをまとめる
+            foreach($tables as $value){
                 //一軒分をとるために　仮の配列を作成
                 $temp=array('biz_id'=>$value->id,'ticket_code'=>$value->ticket_code,'sales_id'=>$value->sales_id,'ticket_name'=>$value->ticket_name,'ticket_contents'=>array(),'ticket_types'=>array());
+                //tables03で同じチケットコードであれば　ticket_contentsという配列にまとめていれていく
+                foreach($tables03 as $t03){
+                    if($value->ticket_code == $t03->ticket_code){
+                        //空の配列を用意
+                        $typevalue=array();
+                        //type_nameとtype_moneyをまとめ
+                        $typevalue+=array("type_name"=>$t03->contents_data);
+                        //ticket_contentsにいれる　　をあるだけ繰り返して挿入する
+                        array_push($temp['ticket_contents'],$typevalue);
+                    }
+                }
+                //tables05で同じチケットコードであれば　ticket_typesという配列にまとめていれていく
+                foreach($tables05 as $t05){
+                    if($value->ticket_code == $t05->ticket_code){
+                        //空の配列を用意
+                        $typevalue=array();
+                        //type_nameとtype_moneyをまとめ
+                        $typevalue+=array("type_name"=>$t05->type_name);
+                        $typevalue+=array("type_money"=>$t05->type_money);
+                        //ticket_typesにいれる　　をあるだけ繰り返して挿入する
+                        array_push($temp['ticket_types'],$typevalue);
+                    }
+                }
+                //最後にまとめてvaluesのtickets内に放り込む
+                array_push($values['tickets'],$temp);
+                //}
+            }
+    }
 
+        return $values;
+    }
+    //webAPI　チケットの詳細を送り返す
+    public function tickets_detail(REQUEST $request){
+        //返し値用配列 basecontrollerを使う場合　必要なし
+        $values=array('status'=>0,'total_num'=>0,'tickets'=>array());
+        //選択した時間をcarbonをつかって書式を統一する
+        $selectTime=new Carbon($request->sales_day);//これで2021-10-01 を2021-10-01 00:00:00の形に
+
+        //件数カウント
+        $tablenum=DB::table('tables02')
+                    ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+                    ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+                    ->get();
+
+        //引数がない　もしくは　件数が０　の場合は status=-1 error_messageを返す
+        if(!isset($request->sales_day)
+             || !isset($request->num )
+             || !isset($request->page)
+             || $tablenum->count()==0){
+            //エラー用変数
+            $error=array('status'=>-1,'error_message'=>array());
+            //各項目それぞれエラー処理をかける
+            if(!isset($request->sales_day)){array_push($error['error_message'],"sales_dayは必須です");};
+            if(!isset($request->num)){array_push($error['error_message'],"numは必須です");};
+            if(!isset($request->page)){array_push($error['error_message'],"pageは必須です");};
+            if(isset($request->sales_day)&&$tablenum->count()==0){array_push($error['error_message'],"件数は０です");};
+            //エラーメッセージを返す
+            return $error;
+        }else{
+            //table01,02,03
+            //table1,2をチケットコードでつなぐ
+            //id biz_id ticket_code sales_id ticket_name sales_interval_start sales_interval_end を取得
+            //$reqest->ticket_codeで抽出
+            //sales_interval_start と sales_interval_endの間のチケット　で抽出
+            //ペジネイトで件数を限定する
+            $tables=DB::table('tables01')
+            ->join('tables02','tables01.ticket_code','=','tables02.ticket_code')
+            ->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables02.sales_interval_start','tables02.sales_interval_end'])
+            //条件：選択した時間がstartからendの間にある
+            ->where('tables01.ticket_code','=',$request->ticket_code)
+            ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+            ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+            ->paginate($request->num,$request->page);
+
+            //総件数カウント
+            //上記と同条件にして getからcountをする
+            $tablenum=DB::table('tables02')
+            //->select(['tables01.id','tables02.biz_id','tables02.ticket_code','tables02.sales_id','tables01.ticket_name','tables03.contents_data','tables02.sales_interval_start','tables02.sales_interval_end'])
+            //条件：選択した時間がstartからendの間にある
+            ->where('ticket_code','=',$request->ticket_code)
+            ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+            ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+            ->get();
+            //件数取得
+            $values['total_num']=$tablenum->count();
+
+
+            //tables03取得
+            $tables03=DB::table('tables03')->get();
+            //tables05取得
+            $tables05=DB::table('tables05')->get();
+            //$tempに１件分のtiketsを作成して、まとめの$valueに入れていく
+            //$tablesで抽出したデータを元に　ticket_codeで判断して　同じであれば入れていく
+            //送るデータをまとめる
+            foreach($tables as $value){
+                //一軒分をとるために　仮の配列を作成
+                $temp=array('biz_id'=>$value->id,'ticket_code'=>$value->ticket_code,'sales_id'=>$value->sales_id,'ticket_name'=>$value->ticket_name,'ticket_contents'=>array(),'ticket_types'=>array());
                 //tables03で同じチケットコードであれば　ticket_contentsという配列にまとめていれていく
                 foreach($tables03 as $t03){
                     if($value->ticket_code == $t03->ticket_code){
@@ -208,9 +485,9 @@ class ticketsController extends BaseController
 
 
 
-
-
     //チケット予約
+    //POST
+    //
     public function ticket_reserve(REQUEST $request){
         //dump($request->user_id);
         //dump($request->ticket_types['type_id']);
@@ -297,14 +574,6 @@ class ticketsController extends BaseController
             return $error;
         }
 
-
-
-
-
-        //外部apiここでエラーを起こしている
-
-        dump($request);
-
         //リクエストの単価が正しいものを送信しているか確認
         //m_ticket_types(tables05)->type_money（単価）が requestのtype_moneyと同一か確認
         //[biz_id][ticket_code][sales_id]
@@ -318,13 +587,6 @@ class ticketsController extends BaseController
                     return $error;
                 }
         }
-
-
-
-
-
-
-
 
         //販売期間内にあるかを確認
         //unixtimeより販売開始と販売終了の間であればよい
