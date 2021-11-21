@@ -32,3 +32,9 @@ Route::get('/tickets_ticket_code_detail','api\ticketsController@sales_interval_t
 
 //post チケット登録
 Route::post('/tickets/reserve','api\ticketsController@ticket_reserve');
+
+//get タイプ取得
+Route::get('/re_types','api\ticketsController@re_types');
+
+//get 購入数取得
+Route::get('/re_buyNum','api\ticketsController@re_buyNum');
