@@ -485,8 +485,9 @@ class ticketsController extends BaseController
 
 
 
-    //チケット予約
+    //チケット購入
     //POST
+    //
     //
     public function ticket_reserve(REQUEST $request){
         //dump($request->user_id);
@@ -503,7 +504,6 @@ class ticketsController extends BaseController
 
         //m_ticket_intervals（tables07）
         //tables07 [biz_id][ticket_code][sales_id][ticket_interval_start]が同一のものが存在するか確認
-
         if(!DB::table('tables07')
                 ->where('biz_id','=',$request->biz_id)
                 ->where('ticket_code','=',$request->ticket_code)
@@ -538,6 +538,7 @@ class ticketsController extends BaseController
 
 
         //m_ticket_reserves（tables08）
+        //チケットの数を出す
         //tables08[biz_id][ticket_code][sales_id][ticket_interval_start]より集約　それらのticket_total_numの合計値を出す
         $ticket_total_num = DB::table('tables08')
             ->where('biz_id','=',$request->biz_id)
@@ -707,14 +708,6 @@ class ticketsController extends BaseController
             }
 
 
-            //$test = DB::table('tables02');
-            //$test->get();
-            //dump($test);
-            //$test->where('id','=',1)->first();
-            //dump($test);
-/*             dump($test->get());
-            dump($test->where('id','=',7)->first());
-            dump($test->get()); */
 
             DB::commit();
             //return array('status'=>0,'reserve_code'=>$reserv_code);
@@ -728,6 +721,39 @@ class ticketsController extends BaseController
         }
     }
 
+
+
+
+    //ticket_codeを受け取って、typesのデータを返す
+    public function re_types(REQUEST $request){
+        $value = array();
+        //各チケットの情報を取得する（typeで別れれているもの)
+        $tables05 = DB::table('tables05')->where('ticket_code','=',$request->ticket_code)->get();
+        foreach($tables05 as $t05){
+            array_push($value,
+                        array("type_id"=>$t05->type_id,
+                              "type_name"=>$t05->type_name,
+                              "type_money"=>$t05->type_money));
+        }
+        return $value;
+    }
+
+
+    //チケットコードを元に、現在どれだけ買われているかを返す
+    public function re_buyNum(REQUEST $request){
+        //購入されている数を取得
+        //購入したものがある場合（抽出したものが空でない場合合計取得　確認済
+        $value=0;
+        $tables08 = DB::table('tables08')->where('ticket_code','=',$request->ticket_code)
+        ->where('sales_id','=',$request->sales_id)
+        ->get();
+        if($tables08->isNotEmpty()){
+            foreach($tables08 as $index){
+                $value += $index->ticket_total_num;
+            }
+        }
+        return $value;
+    }
 
 
 }
