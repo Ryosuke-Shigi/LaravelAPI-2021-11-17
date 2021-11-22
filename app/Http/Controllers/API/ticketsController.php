@@ -265,7 +265,7 @@ class ticketsController extends BaseController
             //送るデータをまとめる
             foreach($tables as $value){
                 //一軒分をとるために　仮の配列を作成
-                $temp=array('sales_id'=>$value->sales_id,'ticket_code'=>$value->ticket_code,'ticket_name'=>$value->ticket_name,'contents_data'=>array(),'cautions_text'=>array(),'ticket_contents'=>array(),'ticket_types'=>array());
+                $temp=array('sales_id'=>$value->sales_id,'ticket_code'=>$value->ticket_code,'ticket_name'=>$value->ticket_name,'ticket_interval_start'=>0,'contents_data'=>array(),'cautions_text'=>array());
                 //tables03で同じチケットコードであれば　ticket_contentsという配列にまとめていれていく
                 foreach($tables03 as $t03){
                         array_push($temp['contents_data'],$t03->contents_data);
@@ -274,6 +274,7 @@ class ticketsController extends BaseController
                 foreach($tables04 as $t04){
                         array_push($temp['cautions_text'],$t04->cautions_text);
                 }
+                $temp['ticket_interval_start']=DB::table('tables07')->where('ticket_code','=',$value->ticket_code)->where('sales_id','=',$value->sales_id)->first()->ticket_interval_start;
                 //最後にまとめてvaluesのtickets内に放り込む
                 array_push($values['tickets'],$temp);
                 //}
@@ -494,13 +495,22 @@ class ticketsController extends BaseController
         //dump($request->ticket_types['type_id']);
         //エラー返答用配列
          $error=array('status'=>-1,'error_message'=>array());
-        //table:users に存在するか
+
+
+        //テストのため、いったんユーザIDはコメントアウト（20211122)
+         //table:users に存在するか
         //->exists()は存在するか否かを返答する
         //存在していればture いなければfalseを返答する
-        if(!DB::table('users')->where('id',$request->user_id)->exists()){
+/*         if(!DB::table('users')->where('id',$request->user_id)->exists()){
             array_push($error['error_message'],"non user");
             return $error;
-        }
+        } */
+
+        //いつから　いつまで
+/*         ->whereDate('sales_interval_start','<=',$selectTime->todatetimestring())//"日付の条件をつける"   いつから
+        ->whereDate('sales_interval_end','>=',$selectTime->todatetimestring())//”日付の条件２をつける” いつまで
+ */
+
 
         //m_ticket_intervals（tables07）
         //tables07 [biz_id][ticket_code][sales_id][ticket_interval_start]が同一のものが存在するか確認
@@ -508,7 +518,8 @@ class ticketsController extends BaseController
                 ->where('biz_id','=',$request->biz_id)
                 ->where('ticket_code','=',$request->ticket_code)
                 ->where('sales_id','=',$request->sales_id)
-                ->where('ticket_interval_start','=',$request->interval_start)->exists()){
+                ->where('ticket_interval_start','=',$request->interval_start)
+                ->exists()){
             array_push($error['error_message'],"non user tables07 m_ticket_intervals");
             return $error;
         }
@@ -544,7 +555,8 @@ class ticketsController extends BaseController
             ->where('biz_id','=',$request->biz_id)
             ->where('ticket_code','=',$request->ticket_code)
             ->where('sales_id','=',$request->sales_id)
-            ->where('ticket_interval_start','=',$request->interval_start)->sum('ticket_total_num');
+            ->where('ticket_interval_start','=',$request->interval_start)
+            ->sum('ticket_total_num');
 
 
         //m_ticket_intervals（tables07）
@@ -554,7 +566,9 @@ class ticketsController extends BaseController
             ->where('biz_id','=',$request->biz_id)
             ->where('ticket_code','=',$request->ticket_code)
             ->where('sales_id','=',$request->sales_id)
-            ->where('ticket_interval_start','=',$request->interval_start)->first()->ticket_num;
+            ->where('ticket_interval_start','=',$request->interval_start)
+
+            ->first()->ticket_num;
 
         //購入枚数がチケット販売枚数＋チケット層購入枚数よりも少ないことを確認　大きければエラーを返す
         /*
