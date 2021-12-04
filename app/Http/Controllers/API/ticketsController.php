@@ -770,4 +770,85 @@ class ticketsController extends BaseController
     }
 
 
+    //get 売上日付の開始と終了と何Page目かを受け取って、
+    //NO　商品番号　チケット名　販売期間　券種　価格　キャンセル料金
+    //売上枚数　キャンセル料なしはいくつか　キャンセル料ありはいくつか　合計金額　を返す
+    public function salesManagement_data(REQUEST $request){
+        //返し値配列初期化
+        //総件数、ページ数、チケット情報　を返す
+        $value = array('total'=>0,'lastpage'=>0,'tickets'=>array());
+
+        //返し値の基本を作成
+         $tableAll = DB::table('tables01')
+        ->join('tables02','tables01.ticket_code','=','tables02.ticket_code')
+        ->join('tables05','tables01.ticket_code','=','tables05.ticket_code')
+
+        ->whereDate('tables02.sales_interval_end','>=',$request->interval_start)
+        ->whereDate('tables02.sales_interval_end','<=',$request->interval_end)
+
+        ->paginate($request->num,'*','page',$request->page);
+
+        dump('tableAll');
+        //基本にデータをいれる
+        $value['total']=$tableAll->total();
+        $value['lastpage']=$tableAll->lastpage();
+        //一度Jsonデータにエンコードしてからデコードすると　単純なデータ構造の配列になる
+        $value['tickets']=json_decode(json_encode($tableAll->items()),true);
+
+        //↑をキャストで試してみたが、できななかった。。。
+        //$value['tickets']=(array)($tableAll->items());
+
+        //必要データを追加する
+        //table08,09,10を繋げる
+        $addData = DB::table('tables08')
+                ->join('tables09','tables08.reserv_code','=','tables09.reserv_code')
+                ->join('tables10','tables08.reserv_code','=','tables10.reserv_code')
+                ->get();
+
+        //売上枚数をとる
+        foreach($value['tickets'] as $index=>$table){
+            $buy_num=0;//売上数
+            $cancel_num=0;//キャンセル数
+            foreach($addData as $temp){
+                if(($table['ticket_code']==$temp->ticket_code) && ($table['ticket_name']==$temp->ticket_name)){
+                    //比較用　売上日付開始/終了を取得
+                    $start = new Carbon($request->interval_start);
+                    $end = new Carbon($request->sales_interval_end);
+
+                    if(($temp->ticket_status==1) || ($temp->ticket_status==2)){
+                        $middle = new Carbon($temp->svc_start);
+                        if($middle->between($start,$end)){
+                            $buy_num+=$temp->buy_num;
+                        }
+                    }elseif(($temp->ticket_status==0) || ($temp->ticket_status==3)){
+                        $middle = new Carbon($temp->ticket_end);
+                        if($middle->between($start,$end)){
+                            $buy_num+=$temp->buy_num;
+                        }
+                    }elseif($temp->ticket_status==9 || $temp->ticket_status==10){
+                        $middle = new Carbon($temp->updated_at);
+                        if($middle->between($start,$end)){
+                            //キャンセル料なし
+                            $cancel_num+=$temp->buy_num;
+                        }
+                    }
+                }
+            }
+            //追加　総売上数（キャンセル有無なし）
+            $value['tickets'][$index]+=array("buy_num"=>$buy_num);
+            //追加　キャンセル枚数
+            $value['tickets'][$index]+=array("cancel_num"=>$cancel_num);
+            //追加　キャンセルなし枚数
+            $value['tickets'][$index]+=array("no_cancel_num"=>$buy_num-$cancel_num);
+            //キャンセル料を計算して登録
+            $value['tickets'][$index]+=array("cancel_money"=>round($value['tickets'][$index]['type_money']*$value['tickets'][$index]['cancel_rate']/100));
+            //合計額
+            $value['tickets'][$index]+=array("total_money"=>($value['tickets'][$index]['type_money']*$value['tickets'][$index]['buy_num'])+($value['tickets'][$index]['cancel_money']*$cancel_num));
+
+        }
+        dump($value);
+
+        return $value;
+    }
+
 }
