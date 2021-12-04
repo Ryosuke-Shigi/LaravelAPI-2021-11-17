@@ -38,3 +38,9 @@ Route::get('/re_types','api\ticketsController@re_types');
 
 //get 購入数取得
 Route::get('/re_buyNum','api\ticketsController@re_buyNum');
+
+
+//get 売上日付の開始と終了と何Page目かを受け取って、
+//NO　商品番号　チケット名　販売期間　券種　価格　キャンセル料金
+//売上枚数　キャンセル料なしはいくつか　キャンセル料ありはいくつか　合計金額　を返す
+Route::get('/salesManagement_data','api\ticketsController@salesManagement_data');
