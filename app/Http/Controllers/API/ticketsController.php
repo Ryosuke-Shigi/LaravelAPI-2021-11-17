@@ -529,13 +529,6 @@ class ticketsController extends BaseController
         //dump($request->ticket_types[0]['type_id']);
         //m_tickets_types(tables05)
         //tables05[biz_Id][ticket_code][type_id]　同一存在確認
-        /*
-            これは変数にひとまず条件から保存して　foreachでticket_types[]部分を回す方法も考えるべき
-            複数あった場合の対応として
-            $temp=DB::table('tables05')
-                ->where('biz_id','=',$request->biz_id)
-                ->where('ticket_code','=',$request->ticket_code);
-        */
         foreach($request->ticket_types as $temp){
             if(!DB::table('tables05')
                 ->where('biz_id','=',$request->biz_id)
@@ -810,11 +803,10 @@ class ticketsController extends BaseController
             $buy_num=0;//売上数
             $cancel_num=0;//キャンセル数
             foreach($addData as $temp){
-                if(($table['ticket_code']==$temp->ticket_code) && ($table['ticket_name']==$temp->ticket_name)){
+                if(($table['ticket_code']==$temp->ticket_code) && ($table['ticket_name']==$temp->ticket_name) && ($table['type_id']==$temp->type_id)){
                     //比較用　売上日付開始/終了を取得
                     $start = new Carbon($request->interval_start);
-                    $end = new Carbon($request->sales_interval_end);
-
+                    $end = new Carbon($request->interval_end);
                     if(($temp->ticket_status==1) || ($temp->ticket_status==2)){
                         $middle = new Carbon($temp->svc_start);
                         if($middle->between($start,$end)){
@@ -829,6 +821,7 @@ class ticketsController extends BaseController
                         $middle = new Carbon($temp->updated_at);
                         if($middle->between($start,$end)){
                             //キャンセル料なし
+                            $buy_num+=$temp->buy_num;
                             $cancel_num+=$temp->buy_num;
                         }
                     }
@@ -843,10 +836,9 @@ class ticketsController extends BaseController
             //キャンセル料を計算して登録
             $value['tickets'][$index]+=array("cancel_money"=>round($value['tickets'][$index]['type_money']*$value['tickets'][$index]['cancel_rate']/100));
             //合計額
-            $value['tickets'][$index]+=array("total_money"=>($value['tickets'][$index]['type_money']*$value['tickets'][$index]['buy_num'])+($value['tickets'][$index]['cancel_money']*$cancel_num));
+            $value['tickets'][$index]+=array("total_money"=>($value['tickets'][$index]['type_money']*$value['tickets'][$index]['no_cancel_num'])+($value['tickets'][$index]['cancel_money']*$cancel_num));
 
         }
-        dump($value);
 
         return $value;
     }
